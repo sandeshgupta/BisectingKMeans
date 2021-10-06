@@ -112,39 +112,117 @@ def csr_l2normalize(mat, copy=False, **kargs):
 # %%
 import numpy as np
 
-# doc = [['I', 'am', 'Sandesh', 'I'], ['I', 'am', 'Prithvi', 'I'], ['I', 'am', 'Rohit', 'J']] 
-# mat = build_matrix(doc)
-# print(mat)
-
 with open("train.dat", "r", encoding="utf8") as fh:
     rows = fh.readlines()
 len(rows)
 
-# rows = ['1 2 2 1 3 1', '1 2 2 1 4 1', '1 1 2 1 5 1 6 1'] 
+# rows = ['1 1 2 1 3 1', 
+#         '1 2 2 1 4 1', 
+#         '1 1 2 1 6 1', 
+#         '1 1 2 1 5 1', 
+#         '1 1 2 1 7 1',
+#        '1 1 2 1 8 1', 
+#         '1 1 2 1 9 1']
+
 mat1 = build_matrix_1(rows)
-
-csr_info(mat1)
-
+# csr_info(mat1)
 mat2 = csr_idf(mat1, copy=True)
 mat3 = csr_l2normalize(mat2, copy=True)
 
 print(mat1.shape)
-print("mat1:", mat1[15,:20].todense(), "\n")
-print("mat2:", mat2[15,:20].todense(), "\n")
-print("mat3:", mat3[15,:20].todense())
+# print("mat1:", mat1[15,:20].todense(), "\n")
+# print("mat2:", mat2[15,:20].todense(), "\n")
+# print("mat3:", mat3[15,:20].todense())
 
 # %%
 from sklearn.cluster import KMeans
+from numpy import *
 
 num_clusters = 7
-km = KMeans(n_clusters=num_clusters)
-km.fit(mat3)
-clusters = km.labels_.tolist()
 
-print(len(clusters))
+X = mat3
+clusterMap = {}
+for idx,row in enumerate(X):
+    clusterMap[idx] = idx
 
+# print(localToMatMapping)
 
+finalClusterLabels = {}
+
+# labels = 
+X = mat3
+current_clusters = 1
+while current_clusters != num_clusters:
+    print('============================================')
+#     print('final labels', finalClusterLabels)
+#     print('clusterMap',clusterMap)
+    kmeans = KMeans(n_clusters=2).fit(X)
+    cluster_centers = kmeans.cluster_centers_
+#     print(X.shape)
+    sse = [0]*2
+    for point, label in zip(X, kmeans.labels_):
+        sse[label] += np.square(point-cluster_centers[label]).sum()
+    chosen_cluster = np.argmax(sse, axis=0)
+#     print(sse)
+    print('chosen_cluster', chosen_cluster)
+    print('kmeans labels', kmeans.labels_)
+#     print('cluster_centers', cluster_centers.shape)
+    chosen_cluster_data = X[kmeans.labels_ == chosen_cluster]
+    
+    newClusterMap = {}
+    clusterIter = 0
+    for idx, x in enumerate(kmeans.labels_):
+        if(x != chosen_cluster):
+            finalClusterLabels[clusterMap[idx]] = current_clusters
+        elif current_clusters + 1 == num_clusters:
+            finalClusterLabels[clusterMap[idx]] = current_clusters + 1
+        else:
+            newClusterMap[clusterIter] = clusterMap[idx]
+            clusterIter += 1 
+    clusterMap = newClusterMap
+    current_clusters += 1
+    
+    print('chosen_cluster_data', chosen_cluster_data.shape)
+    assigned_cluster_data = X[kmeans.labels_ != chosen_cluster]
+    print('assigned_cluster_data', assigned_cluster_data.shape)
+    X = chosen_cluster_data
+    print('finalClusterLabels - len ', len(finalClusterLabels))
+
+# print(finalClusterLabels)
+
+# print(mat3)
+# km = KMeans(n_clusters=num_clusters)
+# km.fit(mat3)
+
+# %%
+#Compare with last output
+
+from sklearn import metrics
+from sklearn.metrics.cluster import normalized_mutual_info_score
+
+with open("output.dat", "r", encoding="utf8") as fh:
+    labels_true = fh.readlines()
+
+# Number of clusters in labels, ignoring noise if present.
+labels = [finalClusterLabels[key] for key in sorted(finalClusterLabels.keys(), reverse=True)]
+# labels = km.labels_
+# labels_true =  km.labels_.tolist()
+
+n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+print('Estimated number of clusters: %d' % n_clusters_)
+print('NMI: %s' % normalized_mutual_info_score(labels, labels_true))
+print("Homogeneity: %0.3f" % metrics.homogeneity_score(labels_true, labels))
+print("Completeness: %0.3f" % metrics.completeness_score(labels_true, labels))
+print("V-measure: %0.3f" % metrics.v_measure_score(labels_true, labels))
+print("Adjusted Rand Index: %0.3f"
+ % metrics.adjusted_rand_score(labels_true, labels))
+print("Adjusted Mutual Information: %0.3f"
+ % metrics.adjusted_mutual_info_score(labels_true, labels))
+# print("Silhouette Coefficient: %0.3f"
+#  % metrics.silhouette_score(X, labels))
+
+# %%
 with open("output.dat", "w", encoding="utf8") as file:
-     for item in clusters:
-        file.write("%s\n" % str(item + 1))
+     for item in labels:
+        file.write("%s\n" % str(item))
 len(rows)
