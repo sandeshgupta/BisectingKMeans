@@ -16,6 +16,9 @@ def build_matrix_1(docs):
         frequency = doc.split()
         while frequency:
             term, freq, *frequency = frequency
+#             if term in stop_words:
+#                 continue;
+            
             nnz += 1
             if term not in distinctWordsAndIndex:
                 distinctWordsAndIndex[term] = indexIter
@@ -110,12 +113,30 @@ def csr_l2normalize(mat, copy=False, **kargs):
         return mat
 
 # %%
+#pre-processing
+
+# with open("train.clabel", "r", encoding="utf8") as fh:
+#     words = fh.readlines()
+# len(words)
+
+# count = 0
+# stop_words = []
+# for idx, word in enumerate(words):
+#     if len(word.rstrip()) < 4:
+#         stop_words.append(idx+1)
+# #         print(idx, word)
+#         count+=1
+# print(stop_words)
+
+
+# %%
 import numpy as np
 from sklearn.datasets import make_blobs
 
 with open("train.dat", "r", encoding="utf8") as fh:
     rows = fh.readlines()
 len(rows)
+
 
 # rows = ['1 1 2 1 3 1', 
 #         '1 2 2 1 4 1', 
@@ -125,22 +146,19 @@ len(rows)
 #        '1 1 2 1 8 1', 
 #         '1 1 2 1 9 1']
 
-
 # Generate sample data
 # centers = [[1, 1], [-1, -1], [1, -1]]
 # mat1, labels_true = make_blobs(n_samples=750, centers=centers, cluster_std=0.4,
 # random_state=0)
 
 mat1 = build_matrix_1(rows)
-# csr_info(mat1)
+print(type(mat1))
 mat2 = csr_idf(mat1, copy=True)
 mat3 = csr_l2normalize(mat2, copy=True)
 
-print(mat1.shape)
-# print("mat1:", mat1[15,:20].todense(), "\n")
-# print("mat2:", mat2[15,:20].todense(), "\n")
-# print("mat3:", mat3[15,:20].todense())
-# mat3 = mat1
+print(mat3.shape)
+csr_info(mat3)
+
 
 # %%
 from sklearn.cluster import KMeans
@@ -192,7 +210,6 @@ while current_clusters != num_clusters:
     print('finalClusterLabels - len ', len(finalClusterLabels))
 
 # print(finalClusterLabels)
-
 # print(mat3)
 # km = KMeans(n_clusters=num_clusters)
 # km.fit(mat3)
