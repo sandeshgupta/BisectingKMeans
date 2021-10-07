@@ -3,7 +3,7 @@ from collections import Counter
 from scipy.sparse import csr_matrix
 from collections import defaultdict
 
-def build_matrix_1(docs):
+def build_matrix_1(docs, labels):
     r""" Build sparse matrix from a list of documents, 
     each of which is a list of word/terms in the document.  
     """
@@ -16,6 +16,10 @@ def build_matrix_1(docs):
         frequency = doc.split()
         while frequency:
             term, freq, *frequency = frequency
+#             print(term)
+            if term not in labels:
+                continue
+            
             nnz += 1
             if term not in distinctWordsAndIndex:
                 distinctWordsAndIndex[term] = indexIter
@@ -36,6 +40,8 @@ def build_matrix_1(docs):
         frequency = doc.split()
         while frequency:
             term, freq, *frequency = frequency
+            if term not in labels:
+                continue
             ind[i] = distinctWordsAndIndex[term]
             val[i] = int(freq)
             i += 1
@@ -110,92 +116,113 @@ def csr_l2normalize(mat, copy=False, **kargs):
         return mat
 
 # %%
+#pre-processing
+
+import nltk
+from nltk.corpus import stopwords
+
+#Filter labels with length <= 3 and is present in stop words
+stop_words = stopwords.words('english')
+with open("train.clabel", "r", encoding="utf8") as fh:
+    labels = {}
+    for idx, word in enumerate(fh.readlines()):
+        if len(word.rstrip()) < 4 or word.rstrip() in stop_words:
+            continue
+        labels[str(idx+1)] = word.rstrip()
+# print(labels)
+
+
+# %%
 import numpy as np
 from sklearn.datasets import make_blobs
 
 with open("train.dat", "r", encoding="utf8") as fh:
     rows = fh.readlines()
-len(rows)
 
-# rows = ['1 1 2 1 3 1', 
-#         '1 2 2 1 4 1', 
-#         '1 1 2 1 6 1', 
-#         '1 1 2 1 5 1', 
-#         '1 1 2 1 7 1',
-#        '1 1 2 1 8 1', 
-#         '1 1 2 1 9 1']
-
-
-# Generate sample data
-# centers = [[1, 1], [-1, -1], [1, -1]]
-# mat1, labels_true = make_blobs(n_samples=750, centers=centers, cluster_std=0.4,
-# random_state=0)
-
-mat1 = build_matrix_1(rows)
-# csr_info(mat1)
+mat1 = build_matrix_1(rows, labels)
+print(type(mat1))
 mat2 = csr_idf(mat1, copy=True)
 mat3 = csr_l2normalize(mat2, copy=True)
 
-print(mat1.shape)
-# print("mat1:", mat1[15,:20].todense(), "\n")
-# print("mat2:", mat2[15,:20].todense(), "\n")
-# print("mat3:", mat3[15,:20].todense())
-# mat3 = mat1
+print(mat3.shape)
+csr_info(mat3)
 
 # %%
 from sklearn.cluster import KMeans
 from numpy import *
+%matplotlib inline
+import matplotlib.pyplot as plt
 
 num_clusters = 7
+k_list = [] 
+sse_list = [] 
 
-X = mat3
-clusterMap = {}
-for idx,row in enumerate(X):
-    clusterMap[idx] = idx
-finalClusterLabels = {}
+for k in range(7, 8):
+    total_SSE = 0
 
-current_clusters = 1
-while current_clusters != num_clusters:
-    print('============================================')
-#     print('final labels', finalClusterLabels)
-#     print('clusterMap',clusterMap)
-    kmeans = KMeans(n_clusters=2).fit(X)
-    cluster_centers = kmeans.cluster_centers_
-#     print(X.shape)
-    sse = [0]*2
-    for point, label in zip(X, kmeans.labels_):
-        sse[label] += np.square(point-cluster_centers[label]).sum()
-    chosen_cluster = np.argmax(sse, axis=0)
-    print('SSE', sse)
-    print('chosen_cluster', chosen_cluster)
-    print('kmeans labels', kmeans.labels_)
-#     print('cluster_centers', cluster_centers.shape)
-    chosen_cluster_data = X[kmeans.labels_ == chosen_cluster]
-    
-    newClusterMap = {}
-    clusterIter = 0
-    for idx, x in enumerate(kmeans.labels_):
-        if(x != chosen_cluster):
-            finalClusterLabels[clusterMap[idx]] = current_clusters
-        elif current_clusters + 1 == num_clusters:
-            finalClusterLabels[clusterMap[idx]] = current_clusters + 1
-        else:
-            newClusterMap[clusterIter] = clusterMap[idx]
-            clusterIter += 1 
-    clusterMap = newClusterMap
-    current_clusters += 1
-    
-    print('chosen_cluster_data', chosen_cluster_data.shape)
-    assigned_cluster_data = X[kmeans.labels_ != chosen_cluster]
-    print('assigned_cluster_data', assigned_cluster_data.shape)
-    X = chosen_cluster_data
-    print('finalClusterLabels - len ', len(finalClusterLabels))
+    X = mat3
+    clusterMap = {}
+    for idx,row in enumerate(X):
+        clusterMap[idx] = idx
+    finalClusterLabels = {}
+
+    current_clusters = 1
+    while current_clusters != num_clusters:
+        print('============================================')
+    #     print('final labels', finalClusterLabels)
+    #     print('clusterMap',clusterMap)
+        kmeans = KMeans(n_clusters=2).fit(X)
+        print(kmeans.inertia_ )
+        cluster_centers = kmeans.cluster_centers_
+    #     print(X.shape)
+        sse = [0]*2
+        for point, label in zip(X, kmeans.labels_):
+            sse[label] += np.square(point-cluster_centers[label]).sum()
+        chosen_cluster = np.argmax(sse, axis=0)
+        total_SSE += sse[np.argmin(sse, axis=0)]
+        print('SSE', sse)
+        print('Total SSE', total_SSE)
+        print('chosen_cluster', chosen_cluster)
+        print('kmeans labels', kmeans.labels_)
+    #     print('cluster_centers', cluster_centers.shape)
+        chosen_cluster_data = X[kmeans.labels_ == chosen_cluster]
+
+        newClusterMap = {}
+        clusterIter = 0
+        for idx, x in enumerate(kmeans.labels_):
+            if(x != chosen_cluster):
+                finalClusterLabels[clusterMap[idx]] = current_clusters
+            elif current_clusters + 1 == num_clusters:
+                finalClusterLabels[clusterMap[idx]] = current_clusters + 1
+            else:
+                newClusterMap[clusterIter] = clusterMap[idx]
+                clusterIter += 1 
+        clusterMap = newClusterMap
+        current_clusters += 1
+
+        print('chosen_cluster_data', chosen_cluster_data.shape)
+        assigned_cluster_data = X[kmeans.labels_ != chosen_cluster]
+        print('assigned_cluster_data', assigned_cluster_data.shape)
+        X = chosen_cluster_data
+        print('finalClusterLabels - len ', len(finalClusterLabels))
+
+    k_list.append(k)
+    sse_list.append(kmeans.inertia_ )
+        
+print(k_list, sse_list)
+
+
 
 # print(finalClusterLabels)
-
 # print(mat3)
 # km = KMeans(n_clusters=num_clusters)
 # km.fit(mat3)
+
+# %%
+plt.plot(k_list, sse_list)
+plt.ylabel('SSE')
+plt.xlabel('k')
+plt.show()
 
 # %%
 #Compare with last output
@@ -227,3 +254,17 @@ with open("output.dat", "w", encoding="utf8") as file:
      for item in labels:
         file.write("%s\n" % str(item))
 len(rows)
+
+# %%
+res = {}
+with open('output.dat', 'r') as resultFile:
+    labels_true = resultFile.readlines()
+    for (row, label) in enumerate(labels_true):  
+
+        if not label in res:
+            res[label] = 1
+        else:
+            res[label] = res[label] + 1
+            
+#         resultFile.write(str(label + 1) + '\n');
+res
