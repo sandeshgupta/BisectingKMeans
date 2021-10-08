@@ -233,8 +233,8 @@ print('Shape before SVD')
 csr_info(tf_idf_vector)
 
 print("Start Time =", datetime.now().strftime("%H:%M:%S"))
-components = 2500
-while components < 2501:
+components = 5000
+while components < 6001:
     print('============================================')
     print('SVD number of concepts = ', components)
     tsvd = TruncatedSVD(n_components=components)
@@ -243,10 +243,14 @@ while components < 2501:
 #     print(''tsvd.singular_values_.sum())
 #     print('Shape after SVD')
     csr_info(mat4)
-    finalClusterLabels = BisectingKMeans(mat4, 10, 10, 1)
+#     finalClusterLabels = BisectingKMeans(mat4, 11, 11, 1)
     components += 500
 print("End Time =", datetime.now().strftime("%H:%M:%S"))
 
+
+# %%
+csr_info(mat4)
+finalClusterLabels = BisectingKMeans(mat4, 14, 14, 1)
 
 # %%
 # plt.plot(k_list, sse_list)
