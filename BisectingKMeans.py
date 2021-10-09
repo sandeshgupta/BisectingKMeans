@@ -19,52 +19,6 @@ def csr_info(mat, name="", non_empy=False):
         print( "%s [nrows %d, ncols %d, nnz %d]" % (name, 
                 mat.shape[0], mat.shape[1], len(mat.data)) )
         
-# # scale matrix and normalize its rows
-# def csr_idf(mat, copy=False, **kargs):
-#     r""" Scale a CSR matrix by idf. 
-#     Returns scaling factors as dict. If copy is True, 
-#     returns scaled matrix and scaling factors.
-#     """
-#     if copy is True:
-#         mat = mat.copy()
-#     nrows = mat.shape[0]
-#     nnz = mat.nnz
-#     ind, val, ptr = mat.indices, mat.data, mat.indptr
-#     # document frequency
-#     df = defaultdict(int)
-#     for i in ind:
-#         df[i] += 1
-#     # inverse document frequency
-#     for k,v in df.items():
-#         df[k] = np.log(nrows / float(v))  ## df turns to idf - reusing memory
-#     # scale by idf
-#     for i in range(0, nnz):
-#         val[i] *= df[ind[i]]
-        
-#     return df if copy is False else mat
-
-# def csr_l2normalize(mat, copy=False, **kargs):
-#     r""" Normalize the rows of a CSR matrix by their L-2 norm. 
-#     If copy is True, returns a copy of the normalized matrix.
-#     """
-#     if copy is True:
-#         mat = mat.copy()
-#     nrows = mat.shape[0]
-#     nnz = mat.nnz
-#     ind, val, ptr = mat.indices, mat.data, mat.indptr
-#     # normalize
-#     for i in range(nrows):
-#         rsum = 0.0    
-#         for j in range(ptr[i], ptr[i+1]):
-#             rsum += val[j]**2
-#         if rsum == 0.0:
-#             continue  # do not normalize empty rows
-#         rsum = 1.0/np.sqrt(rsum)
-#         for j in range(ptr[i], ptr[i+1]):
-#             val[j] *= rsum
-            
-#     if copy is True:
-#         return mat
 
 def build_matrix_1(docs, labels):
     r""" Build sparse matrix from a list of documents, 
@@ -139,7 +93,7 @@ def BisectingKMeans(mat4, k_start, k_end, step):
         while current_clusters != num_clusters:
         #     print('final labels', finalClusterLabels)
         #     print('clusterMap',clusterMap)
-            kmeans = KMeans(n_clusters=2).fit(X)
+            kmeans = KMeans(n_clusters=2, n_init = 50).fit(X)
     #         print(kmeans.inertia_ )
             cluster_centers = kmeans.cluster_centers_
         #     print(X.shape)
@@ -231,26 +185,24 @@ tfidf_transformer=TfidfTransformer(smooth_idf=True,use_idf=True)
 tf_idf_vector=tfidf_transformer.fit(mat1).transform(mat1)
 print('Shape before SVD')
 csr_info(tf_idf_vector)
-
+14
 print("Start Time =", datetime.now().strftime("%H:%M:%S"))
-components = 5000
-while components < 6001:
+components = 4500
+while components < 4501:
     print('============================================')
     print('SVD number of concepts = ', components)
     tsvd = TruncatedSVD(n_components=components)
     mat4 = tsvd.fit(tf_idf_vector).transform(tf_idf_vector)
     print('Variance ratio sum', tsvd.explained_variance_ratio_.sum())
-#     print(''tsvd.singular_values_.sum())
-#     print('Shape after SVD')
     csr_info(mat4)
-#     finalClusterLabels = BisectingKMeans(mat4, 11, 11, 1)
+    finalClusterLabels = BisectingKMeans(mat4, 14, 14, 2)
     components += 500
 print("End Time =", datetime.now().strftime("%H:%M:%S"))
 
 
 # %%
 csr_info(mat4)
-finalClusterLabels = BisectingKMeans(mat4, 14, 14, 1)
+finalClusterLabels = BisectingKMeans(mat4, 10, 10, 1)
 
 # %%
 # plt.plot(k_list, sse_list)
@@ -259,7 +211,6 @@ finalClusterLabels = BisectingKMeans(mat4, 14, 14, 1)
 # plt.show()
 
 # %%
-
 labels = [finalClusterLabels[key] for key in sorted(finalClusterLabels.keys())]
 with open("output.dat", "w", encoding="utf8") as file:
      for item in labels:
