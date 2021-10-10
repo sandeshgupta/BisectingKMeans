@@ -1,30 +1,18 @@
-# %%
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
 from collections import Counter
 from scipy.sparse import csr_matrix
 from collections import defaultdict
-
-
-def csr_info(mat, name="", non_empy=False):
-    r""" Print out info about this CSR matrix. If non_empy, 
-    report number of non-empty rows and cols as well
-    """
-    if non_empy:
-        print("%s [nrows %d (%d non-empty), ncols %d (%d non-empty), nnz %d]" % (
-                name, mat.shape[0], 
-                sum(1 if mat.indptr[i+1] > mat.indptr[i] else 0 
-                for i in range(mat.shape[0])), 
-                mat.shape[1], len(np.unique(mat.indices)), 
-                len(mat.data)))
-    else:
-        print( "%s [nrows %d, ncols %d, nnz %d]" % (name, 
-                mat.shape[0], mat.shape[1], len(mat.data)) )
-        
+from sklearn.cluster import KMeans
+from numpy import *
+get_ipython().run_line_magic('matplotlib', 'inline')
+import matplotlib.pyplot as plt
 
 def build_matrix_1(docs, labels):
-    r""" Build sparse matrix from a list of documents, 
-    each of which is a list of word/terms in the document.  
-    """
-        
     distinctWordsAndIndex = {}
     indexIter = 0
     nnz = 0
@@ -33,7 +21,6 @@ def build_matrix_1(docs, labels):
         frequency = doc.split()
         while frequency:
             term, freq, *frequency = frequency
-#             print(term)
             if term not in labels:
                 continue
             
@@ -41,10 +28,10 @@ def build_matrix_1(docs, labels):
             if term not in distinctWordsAndIndex:
                 distinctWordsAndIndex[term] = indexIter
                 indexIter += 1    
+                
     nrows = len(docs)
     ncols = len(distinctWordsAndIndex)
     
-    # set up memory
     ind = np.zeros(nnz, dtype=int)
     val = np.zeros(nnz, dtype=int)
     ptr = np.zeros(nrows+1, dtype=int)
@@ -69,17 +56,35 @@ def build_matrix_1(docs, labels):
     
     return mat
 
-from sklearn.cluster import KMeans
-from numpy import *
-%matplotlib inline
-import matplotlib.pyplot as plt
+
+# In[2]:
+
+
+#pre-processing
+#Filter labels with length <= 3 and is present in stop words collection
+
+import nltk
+from nltk.corpus import stopwords
+
+def getValidWords():
+    stop_words = stopwords.words('english')
+    with open("train.clabel", "r", encoding="utf8") as fh:
+        labels = {}
+        for idx, word in enumerate(fh.readlines()):
+            if len(word.rstrip()) < 4 or word.rstrip() in stop_words:
+                continue
+            labels[str(idx+1)] = word.rstrip()
+    return labels
+    # print(labels)
+
+
+# In[3]:
 
 
 def BisectingKMeans(mat4, k_start, k_end, step):
     for k in range(k_start, k_end+1, step):
-#         print('============================================')
+        print('--------------------------------------------')
         X = mat4
-        num_clusters = k
         k_list = [] 
         sse_list = [] 
         total_SSE = 0
@@ -90,134 +95,126 @@ def BisectingKMeans(mat4, k_start, k_end, step):
             clusterMap[idx] = idx
         finalClusterLabels = {}
 
-        while current_clusters != num_clusters:
-        #     print('final labels', finalClusterLabels)
-        #     print('clusterMap',clusterMap)
-            kmeans = KMeans(n_clusters=2, n_init = 50).fit(X)
-    #         print(kmeans.inertia_ )
+        while current_clusters != k:
+            kmeans = KMeans(n_clusters=2, n_init=30).fit(X)
             cluster_centers = kmeans.cluster_centers_
-        #     print(X.shape)
             sse = [0]*2
             for point, label in zip(X, kmeans.labels_):
                 sse[label] += np.square(point-cluster_centers[label]).sum()
             chosen_cluster = np.argmax(sse, axis=0)
             total_SSE += sse[np.argmin(sse, axis=0)]
-    #         print('SSE', sse)
-    #         print('Total SSE', total_SSE)
-    #         print('chosen_cluster', chosen_cluster)
-    #         print('kmeans labels', kmeans.labels_)
-        #     print('cluster_centers', cluster_centers.shape)
             chosen_cluster_data = X[kmeans.labels_ == chosen_cluster]
-    # 
             newClusterMap = {}
             clusterIter = 0
+            #to keep track of the index of the clusters
             for idx, x in enumerate(kmeans.labels_):
                 if(x != chosen_cluster):
                     finalClusterLabels[clusterMap[idx]] = current_clusters
-                elif current_clusters + 1 == num_clusters:
+                elif current_clusters + 1 == k:
                     finalClusterLabels[clusterMap[idx]] = current_clusters + 1
                 else:
                     newClusterMap[clusterIter] = clusterMap[idx]
                     clusterIter += 1 
             clusterMap = newClusterMap
             current_clusters += 1
-
-    #         print('chosen_cluster_data', chosen_cluster_data.shape)
             assigned_cluster_data = X[kmeans.labels_ != chosen_cluster]
-    #         print('assigned_cluster_data', assigned_cluster_data.shape)
             X = chosen_cluster_data
-    #         print('finalClusterLabels - len ', len(finalClusterLabels))
-
         k_list.append(k)
         sse_list.append(kmeans.inertia_ )
         print_internal_metrics(mat4, finalClusterLabels)
-
+        print('--------------------------------------------')
     return finalClusterLabels
-#         print(k_list, sse_list)
 
 
-# %%
-#pre-processing
-
-import nltk
-from nltk.corpus import stopwords
-
-#Filter labels with length <= 3 and is present in stop words
-stop_words = stopwords.words('english')
-with open("train.clabel", "r", encoding="utf8") as fh:
-    labels = {}
-    for idx, word in enumerate(fh.readlines()):
-        if len(word.rstrip()) < 4 or word.rstrip() in stop_words:
-            continue
-        labels[str(idx+1)] = word.rstrip()
-# print(labels)
+# In[4]:
 
 
-# %%
 #Internal Metrics
-
 from sklearn import metrics
 
 def print_internal_metrics(mat, labels_dict):
     labels = [labels_dict[key] for key in sorted(labels_dict.keys())]
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
 
-    print(n_clusters_, metrics.silhouette_score(mat, labels), metrics.calinski_harabasz_score(mat, labels))
-#     print('Estimated number of clusters: %d' % n_clusters_)
-#     print("Silhouette Coefficient: %0.3f" % metrics.silhouette_score(mat, labels))
-#     print("Calinski Harabasz Score: %0.3f" % metrics.calinski_harabasz_score(mat, labels))
+    print('K: %d' % n_clusters_)
+    print("Silhouette Coefficient: %0.3f" % metrics.silhouette_score(mat, labels))
+    print("Calinski Harabasz Score: %0.3f" % metrics.calinski_harabasz_score(mat, labels))
 
 
-# %%
+# In[5]:
+
+
 import numpy as np
 from sklearn.datasets import make_blobs
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer 
 from datetime import datetime
 
-
+#Read the file
 with open("train.dat", "r", encoding="utf8") as fh:
     rows = fh.readlines()
+    
+#Select valid words
+valid_words = getValidWords()
 
-mat1 = build_matrix_1(rows, labels)
+#build csr matrix from valid words only
+mat1 = build_matrix_1(rows, valid_words)
 
+# TF-IDF transform to normalise the matrix
 tfidf_transformer=TfidfTransformer(smooth_idf=True,use_idf=True) 
 tf_idf_vector=tfidf_transformer.fit(mat1).transform(mat1)
-print('Shape before SVD')
-csr_info(tf_idf_vector)
-14
+
+#print CST information
+print('Shape before SVD', tf_idf_vector.shape)
+
 print("Start Time =", datetime.now().strftime("%H:%M:%S"))
-components = 4500
-while components < 4501:
+
+# components = 150
+# while components < 151:
+#     print('concepts', components)
+#     wcss = []
+#     for i in range(2,23,2):
+#         kmeans = KMeans(n_clusters=i,init='k-means++',max_iter=300,n_init=10,random_state=0)
+#         kmeans.fit(tf_idf_vector)
+#         wcss.append(kmeans.inertia_)
+#         print('k', i)
+#     plt.plot(range(2,23,2),wcss)
+#     plt.title('The Elbow Method')
+#     plt.xlabel('Number of clusters')
+#     plt.ylabel('WCSS')
+#     plt.savefig('elbow.png')
+#     plt.show()
+#     components += 50
+
+# This 
+components = 150
+while components < 151:
     print('============================================')
     print('SVD number of concepts = ', components)
     tsvd = TruncatedSVD(n_components=components)
     mat4 = tsvd.fit(tf_idf_vector).transform(tf_idf_vector)
     print('Variance ratio sum', tsvd.explained_variance_ratio_.sum())
-    csr_info(mat4)
-    finalClusterLabels = BisectingKMeans(mat4, 14, 14, 2)
-    components += 500
+    finalClusterLabels = BisectingKMeans(mat4, 10, 10, 2)
+    components += 50
+    print('============================================')
+    
 print("End Time =", datetime.now().strftime("%H:%M:%S"))
 
 
-# %%
-csr_info(mat4)
-finalClusterLabels = BisectingKMeans(mat4, 10, 10, 1)
+# In[6]:
 
-# %%
-# plt.plot(k_list, sse_list)
-# plt.ylabel('SSE')
-# plt.xlabel('k')
-# plt.show()
 
-# %%
+#write the cluster info to output file
 labels = [finalClusterLabels[key] for key in sorted(finalClusterLabels.keys())]
 with open("output.dat", "w", encoding="utf8") as file:
      for item in labels:
         file.write("%s\n" % str(item))
-len(rows)
 
-# %%
+
+# In[7]:
+
+
+#print the number of elements in each cluster
 count_labels = {}
 for label in labels:
     
@@ -225,5 +222,5 @@ for label in labels:
         count_labels[label] = 1
     else:
         count_labels[label] = int(count_labels[label]) + 1
-#     print(count_labels[label])
 print(count_labels)
+
